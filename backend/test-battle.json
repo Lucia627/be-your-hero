@@ -1,0 +1,1 @@
+{"team":[{"id":"c1","name":"test","hp":100,"maxHp":100,"atk":30,"skills":[{"id":"sk1","name":"猛击","type":"physical","cost":2,"power":1.5,"description":"造成1.5倍伤害","limit":"per_turn"}]}],"boss":{"id":"b1","name":"boss","hp":200,"maxHp":200,"atk":20,"skills":[],"bossMultiplier":1},"buffs":[]}
