@@ -222,6 +222,60 @@ const UI = (function() {
   };
   window.hideModal = hideModal;
 
+  // ===== 冒险故事过场画面 =====
+  let storyTypeInterval = null;
+  let storyResolve = null;
+
+  function showStoryOverlay(text, onComplete) {
+    if (!text || typeof text !== 'string') text = '';
+    let overlay = document.getElementById('story-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'story-overlay';
+      overlay.innerHTML =
+        '<div class="story-parchment">' +
+          '<div class="story-text" id="story-text"></div>' +
+          '<button class="story-continue" id="story-continue">点击继续 ▼</button>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      document.getElementById('story-continue').addEventListener('click', hideStoryOverlay);
+    }
+    overlay.classList.add('active');
+    const textEl = document.getElementById('story-text');
+    textEl.textContent = '';
+    document.getElementById('story-continue').style.opacity = '0';
+    document.getElementById('story-continue').style.pointerEvents = 'none';
+    storyResolve = onComplete;
+
+    // 打字机效果
+    let i = 0;
+    if (storyTypeInterval) clearInterval(storyTypeInterval);
+    storyTypeInterval = setInterval(function() {
+      if (i < text.length) {
+        textEl.textContent += text.charAt(i);
+        i++;
+      } else {
+        clearInterval(storyTypeInterval);
+        storyTypeInterval = null;
+        const btn = document.getElementById('story-continue');
+        if (btn) {
+          btn.style.opacity = '1';
+          btn.style.pointerEvents = 'auto';
+        }
+      }
+    }, 45); // 每字45ms
+  }
+
+  function hideStoryOverlay() {
+    const overlay = document.getElementById('story-overlay');
+    if (overlay) overlay.classList.remove('active');
+    if (storyTypeInterval) { clearInterval(storyTypeInterval); storyTypeInterval = null; }
+    if (typeof storyResolve === 'function') { storyResolve(); storyResolve = null; }
+  }
+
+  window.showStoryOverlay = showStoryOverlay;
+  window.hideStoryOverlay = hideStoryOverlay;
+
   return {
     showScreen: showScreen,
     showToast: showToast,
@@ -270,6 +324,20 @@ function createGameCard(card, options) {
   rarity.className = 'card-rarity rarity-common';
   el.appendChild(rarity);
 
+  const skillsWrap = document.createElement('div');
+  skillsWrap.className = 'card-skills-preview';
+  if (card.skills && card.skills.length) {
+    card.skills.slice(0, 2).forEach(function(skill) {
+      const row = document.createElement('div');
+      row.className = 'card-skill-row';
+      row.innerHTML = '<span class="skill-icon type-' + (skill.type || 'physical') + '"></span>' +
+        '<span class="cs-name">' + (skill.name || '') + '</span>' +
+        '<span class="cs-cost">' + skill.cost + '💎</span>';
+      skillsWrap.appendChild(row);
+    });
+  }
+  el.appendChild(skillsWrap);
+
   if (options.clickable && options.onClick) {
     el.addEventListener('click', function() { options.onClick(card); });
   }
@@ -278,19 +346,25 @@ function createGameCard(card, options) {
 
 function createCardDetailHTML(card) {
   var skillsHtml = (card.skills || []).map(function(s) {
-    return '<div class="detail-skill"><h5>' + s.name +
-      ' <span style="font-size:12px;color:var(--accent-cyan);">' + s.cost + '💎</span></h5><p>' +
-      (s.description || '') + '</p></div>';
+    return '<div class="detail-skill">' +
+      '<span class="skill-icon type-' + (s.type || 'physical') + '"></span>' +
+      '<div class="skill-body">' +
+        '<div class="ds-header"><span class="ds-name">' + s.name + '</span><span class="ds-cost">' + s.cost + '💎</span></div>' +
+        '<p>' + (s.description || '') + '</p>' +
+      '</div></div>';
   }).join('');
 
-  return '<div class="game-card" style="cursor:default;">' +
-    '<img class="card-image" src="' + (card.image || card.sourceImage || '') + '" alt="' + (card.name || '') + '">' +
-    '<div class="card-info"><div class="card-name">' + (card.name || '') +
-    '</div><div class="card-stats"><span>' + (card.hp || card.maxHp || 0) + ' HP</span><span>' + (card.atk || 0) +
-    ' ATK</span></div></div></div>' +
+  return '<div class="detail-card-preview">' +
+    '<img class="detail-card-image" src="' + (card.image || card.sourceImage || '') + '" alt="' + (card.name || '') + '">' +
+    '<div class="detail-card-name">' + (card.name || '') + '</div>' +
+    '<div class="detail-card-stats"><span>' + (card.hp || card.maxHp || 0) + ' HP</span><span>' + (card.atk || 0) + ' ATK</span></div>' +
+    '</div>' +
+    '<div class="detail-section-title">⚔️ 技能</div>' +
     '<div class="card-detail-skills">' + skillsHtml + '</div>' +
-    '<div style="font-size:13px;color:var(--text-secondary);">' +
-    '<p>类别: ' + (card.category || '未知') + '</p>' +
-    '<p>体型: ' + (card.size || '中等') + '</p>' +
-    '<p>定位: ' + (card.role || '未知') + '</p></div>';
+    '<div class="detail-section-title">📋 信息</div>' +
+    '<div class="detail-card-info">' +
+    '<div class="detail-info-row"><span>类别</span><span>' + (card.category || '未知') + '</span></div>' +
+    '<div class="detail-info-row"><span>体型</span><span>' + (card.size || '中等') + '</span></div>' +
+    '<div class="detail-info-row"><span>定位</span><span>' + (card.role || '未知') + '</span></div>' +
+    '</div>';
 }

@@ -1,13 +1,14 @@
 const express = require('express');
 const multer = require('multer');
 const { validateSingleObject } = require('../services/llmService');
+const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-router.post('/analyze', upload.single('image'), async (req, res, next) => {
+router.post('/analyze', authMiddleware, upload.single('image'), async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: '请上传图片' });

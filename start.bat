@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 title Be Your Hero - Server
 cls
 
@@ -26,10 +27,18 @@ if not exist "%BACKEND_DIR%\server.js" (
 )
 
 set "LOCAL_IP="
-for /f "usebackq tokens=*" %%a in (`powershell -Command "(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.PrefixOrigin -eq 'Dhcp' } | Select-Object -First 1).IPAddress"`) do set "LOCAL_IP=%%a"
+set "ALL_IPS="
 
-if "%LOCAL_IP%"=="" (
-    for /f "usebackq tokens=*" %%a in (`powershell -Command "(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | Select-Object -First 1).IPAddress"`) do set "LOCAL_IP=%%a"
+:: 从 PowerShell 脚本获取所有可用 IPv4 地址
+if exist "%PROJECT_DIR%get-ip.ps1" (
+    for /f "usebackq tokens=*" %%a in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_DIR%get-ip.ps1"`) do (
+        if defined ALL_IPS (
+            set "ALL_IPS=!ALL_IPS!, %%a"
+        ) else (
+            set "ALL_IPS=%%a"
+        )
+        if not defined LOCAL_IP set "LOCAL_IP=%%a"
+    )
 )
 
 echo [System Status]
@@ -41,19 +50,23 @@ echo   Local PC:   http://localhost:8080
 if not "%LOCAL_IP%"=="" (
     echo   LAN IP:     http://%LOCAL_IP%:8080
     echo   Mobile:     http://%LOCAL_IP%:8080
+    if not "%ALL_IPS%"=="%LOCAL_IP%" (
+        echo   All IPs:    %ALL_IPS%
+    )
 ) else (
-    echo   LAN IP:     [Auto-detect failed, check ipconfig manually]
+    echo   LAN IP:     [Auto-detect failed]
+    echo   Tip:        Run 'ipconfig' and use your WiFi/Ethernet IPv4 address
 )
 echo.
 
-echo [Tip]
-echo   If mobile cannot connect:
+echo [Mobile Connection Tips]
 echo   1. Make sure phone and PC are on the same WiFi
-echo   2. Check Windows Firewall is not blocking port 8080
-echo   3. Run this command as Admin to open port 8080:
-echo      netsh advfirewall firewall add rule name="BeYourHero" dir=in action=allow protocol=tcp localport=8080
-
+echo   2. Use the LAN IP above on your phone browser
+echo   3. If still cannot connect, open port 8080 in firewall:
+echo      - Right-click fix-firewall.bat ^> Run as Administrator
+echo      - Or run: netsh advfirewall firewall add rule name="BeYourHero" dir=in action=allow protocol=tcp localport=8080
 echo.
+
 echo Press any key to start server...
 pause >nul
 
@@ -72,3 +85,4 @@ node server.js
 echo.
 echo [Server stopped]
 pause
+endlocal

@@ -4,3 +4,13 @@ backend/data/*.json
 backend/data/backups/
 .DS_Store
 *.log
+
+DEMO-LINKS.txt
+*.bat
+*.ps1
+tunnel-*
+
+
+backend/data/game.db
+frontend/assets/bg/backup/
+

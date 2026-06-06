@@ -4,13 +4,32 @@ const Cards = {
     maxTeamSize: 5,
 
     async loadCollection() {
-        try { this.collection = await API.getCollection(); } catch { this.collection = []; }
+        try {
+            this.collection = (await API.getCollection()).filter(c => c && c.id);
+            // 从 localStorage 恢复图片
+            this.collection.forEach(c => {
+                if (!c.image && !c.sourceImage) {
+                    const img = localStorage.getItem('hero_img_' + c.id);
+                    if (img) { c.image = img; c.sourceImage = img; }
+                }
+            });
+        } catch { this.collection = []; }
     },
 
     async saveToCollection(card) {
-        if (!this.collection.find(c => c.id === card.id)) {
+        if (!card || !card.id) return;
+        if (!this.collection.find(c => c && c.id === card.id)) {
             this.collection.push(card);
-            try { await API.saveCollection(this.collection); } catch {}
+            // 保存图片到 localStorage（后端只存轻量数据，图片从本地恢复）
+            if (card.image || card.sourceImage) {
+                try { localStorage.setItem('hero_img_' + card.id, card.image || card.sourceImage || ''); } catch(e) {}
+            }
+            // 保存时剥离 base64 图片，避免传输几 MB 的 JSON
+            const slimCollection = this.collection.filter(c => c && c.id).map(c => {
+                const { image, sourceImage, ...rest } = c;
+                return rest;
+            });
+            try { await API.saveCollection(slimCollection); } catch {}
         }
     },
 

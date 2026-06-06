@@ -1,20 +1,38 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const { generateCard, generateBoss } = require('../services/cardGenerator');
-const { loadJson, saveJson } = require('../utils/dataStore');
+const { get, all, run } = require('../utils/db');
 const { validateBody } = require('../middleware/validator');
+const { authMiddleware } = require('../middleware/auth');
+
+const LEGACY_CARDS_FILE = path.join(__dirname, '../data/cards.json');
+
+async function migrateLegacyCards(userId) {
+  try {
+    const raw = await fs.promises.readFile(LEGACY_CARDS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    const cards = Array.isArray(parsed) ? parsed : (parsed.data || []);
+    if (cards.length === 0) return;
+
+    // 检查该用户是否已有卡牌
+    const existing = await get('SELECT COUNT(*) as count FROM cards WHERE user_id = ?', [userId]);
+    if (existing && existing.count > 0) return;
+
+    console.log(`[Migrate] Importing ${cards.length} legacy cards for user ${userId}`);
+    for (const card of cards) {
+      const clean = sanitizeCard(card);
+      if (clean && clean.id) {
+        await run('INSERT OR IGNORE INTO cards (id, user_id, card_json) VALUES (?, ?, ?)',
+          [clean.id, userId, JSON.stringify(clean)]);
+      }
+    }
+  } catch (e) {
+    if (e.code !== 'ENOENT') console.error('Legacy cards migration error:', e.message);
+  }
+}
 
 const router = express.Router();
-const CARDS_FILE = path.join(__dirname, '../data/cards.json');
-
-async function loadCards() {
-  const doc = await loadJson(CARDS_FILE, []);
-  return doc.data || [];
-}
-
-async function saveCards(cards) {
-  await saveJson(CARDS_FILE, cards);
-}
 
 function sanitizeCard(card) {
   if (!card || typeof card !== 'object') return null;
@@ -25,6 +43,7 @@ function sanitizeCard(card) {
     size: String(card.size || 'medium'),
     role: String(card.role || '物理输出'),
     traits: Array.isArray(card.traits) ? card.traits.filter(t => typeof t === 'string') : [],
+    rarity: String(card.rarity || 'common'),
     hp: Number(card.hp) || 0,
     maxHp: Number(card.maxHp || card.hp) || 0,
     atk: Number(card.atk) || 0,
@@ -35,6 +54,9 @@ function sanitizeCard(card) {
     obtainedAt: card.obtainedAt || new Date().toISOString()
   };
 }
+
+// 以下接口需要登录
+router.use(authMiddleware);
 
 router.post('/generate-card', validateBody({
   object_name: { required: true, type: 'string' },
@@ -66,7 +88,9 @@ router.post('/generate-boss', validateBody({
 
 router.get('/collection', async (req, res, next) => {
   try {
-    const cards = await loadCards();
+    await migrateLegacyCards(req.user.id);
+    const rows = await all('SELECT * FROM cards WHERE user_id = ? ORDER BY created_at DESC', [req.user.id]);
+    const cards = rows.map(r => JSON.parse(r.card_json)).filter(c => c && c.id);
     res.json(cards);
   } catch (error) {
     next(error);
@@ -81,10 +105,9 @@ router.post('/collection', validateBody({
     if (!card || !card.id) {
       return res.status(400).json({ error: '无效的卡牌数据' });
     }
-    const cards = await loadCards();
-    if (!cards.find(c => c.id === card.id)) {
-      cards.push(card);
-      await saveCards(cards);
+    const existing = await get('SELECT id FROM cards WHERE id = ? AND user_id = ?', [card.id, req.user.id]);
+    if (!existing) {
+      await run('INSERT INTO cards (id, user_id, card_json) VALUES (?, ?, ?)', [card.id, req.user.id, JSON.stringify(card)]);
     }
     res.json({ success: true, card });
   } catch (error) {
@@ -97,16 +120,13 @@ router.post('/collection/batch', validateBody({
 }), async (req, res, next) => {
   try {
     const newCards = (req.body.cards || []).map(sanitizeCard).filter(Boolean);
-    const cards = await loadCards();
     let added = 0;
     for (const card of newCards) {
-      if (!cards.find(c => c.id === card.id)) {
-        cards.push(card);
+      const existing = await get('SELECT id FROM cards WHERE id = ? AND user_id = ?', [card.id, req.user.id]);
+      if (!existing) {
+        await run('INSERT INTO cards (id, user_id, card_json) VALUES (?, ?, ?)', [card.id, req.user.id, JSON.stringify(card)]);
         added++;
       }
-    }
-    if (added > 0) {
-      await saveCards(cards);
     }
     res.json({ success: true, count: added });
   } catch (error) {

@@ -11,7 +11,7 @@ const Battle = {
     this._processing = false;
     // 缓存卡牌图片，避免战斗状态反复传输巨大的 base64
     this._cardImages = {};
-    (team || []).forEach(card => { if (card.id) this._cardImages[card.id] = card.image || card.sourceImage || ''; });
+    (team || []).forEach(card => { if (card && card.id) this._cardImages[card.id] = card.image || card.sourceImage || ''; });
     if (boss && boss.id) this._cardImages[boss.id] = boss.image || boss.sourceImage || '';
     try {
       this.state = await API.startBattle(team, boss, buffs);
@@ -38,8 +38,10 @@ const Battle = {
     // Boss card
     var bossCard = document.getElementById('boss-card');
     bossCard.innerHTML = '';
-    var bCard = createGameCard(s.boss, { clickable: false, imageOverride: this._cardImages[s.boss.id] });
-    bossCard.appendChild(bCard);
+    if (s.boss) {
+      var bCard = createGameCard(s.boss, { clickable: false, imageOverride: s.boss.id ? this._cardImages[s.boss.id] : '' });
+      bossCard.appendChild(bCard);
+    }
 
     var bossHpPct = s.boss.maxHp > 0 ? Math.max(0, (s.boss.currentHp / s.boss.maxHp) * 100) : 0;
     var bossHpFill = document.getElementById('boss-hp-fill');
@@ -121,7 +123,10 @@ const Battle = {
         btn.className = 'battle-skill-btn skill-type-' + (skill.type || 'physical');
         if (usedTurn || usedGame) btn.classList.add('used');
         btn.disabled = disabled;
-        btn.innerHTML = '<span class="bs-name">' + skill.name + '</span><span class="bs-cost">' + skill.cost + '💎</span>';
+        btn.innerHTML = '<span class="skill-icon type-' + (skill.type || 'physical') + '"></span>' +
+          '<div class="bs-info"><span class="bs-name">' + skill.name + '</span>' +
+          '<span class="bs-desc">' + (skill.description || '') + '</span>' +
+          '<span class="bs-cost">' + skill.cost + '💎</span></div>';
 
         btn.addEventListener('click', function(e) {
           e.stopPropagation();

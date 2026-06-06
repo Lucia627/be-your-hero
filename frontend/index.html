@@ -9,16 +9,32 @@
 <body>
 <div id="audio-init" style="display:none;"></div>
 
+<!-- 登录界面 -->
+<div id="screen-login" class="screen active">
+<div class="start-bg"><div class="floating-particles"></div></div>
+<div class="start-content">
+<h1 class="game-title"><span class="title-main">成为你自己的英雄</span><span class="title-sub">Be Your Hero</span></h1>
+<p class="game-desc">输入昵称开始冒险，或加入已有账号</p>
+<div class="login-form">
+<input type="text" id="login-nickname" class="login-input" placeholder="输入你的昵称" maxlength="20" autocomplete="off">
+<button id="btn-login" class="btn btn-primary btn-glow btn-large">进入游戏</button>
+</div>
+<p class="login-hint">无需密码，昵称即身份<br>请牢记你的昵称</p>
+</div>
+</div>
+
 <!-- 开始界面 -->
-<div id="screen-start" class="screen active">
+<div id="screen-start" class="screen">
 <div class="start-bg"><div class="floating-particles"></div></div>
 <div class="start-content">
 <h1 class="game-title"><span class="title-main">成为你自己的英雄</span><span class="title-sub">Be Your Hero</span></h1>
 <p class="game-desc">拍照生成角色，组建你的战队，挑战强大的Boss！</p>
 <div class="start-buttons">
 <button id="btn-start-game" class="btn btn-primary btn-glow">开始冒险</button>
+<button id="btn-pvp-mode" class="btn btn-secondary">⚔️ 玩家对战</button>
 <button id="btn-collection" class="btn btn-secondary">我的收藏</button>
 <button id="btn-how-to-play" class="btn btn-ghost">游戏说明</button>
+<button id="btn-logout" class="btn btn-ghost" style="opacity:0.6;">退出登录</button>
 </div>
 </div>
 </div>
@@ -117,6 +133,63 @@
 </div>
 </div>
 
+<!-- 关卡地图 -->
+<div id="screen-stage-map" class="screen">
+<div class="stage-map-bg"></div>
+<div class="stage-map-header">
+<button id="btn-map-back" class="btn btn-icon">←</button>
+<h2>冒险之路</h2>
+</div>
+<div class="stage-map-container">
+<div class="stage-map-scroll">
+<div class="stage-path-wrap">
+<svg class="stage-curve-svg" viewBox="0 0 760 200" preserveAspectRatio="none">
+<defs>
+<linearGradient id="curveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#00d4ff"/>
+<stop offset="100%" stop-color="#ffd700"/>
+</linearGradient>
+</defs>
+<path class="curve-bg" d="M 60 50 C 140 50 140 150 220 150 C 300 150 300 50 380 50 C 460 50 460 150 540 150 C 620 150 620 50 700 50"
+fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="4" stroke-dasharray="10 6"/>
+<path class="curve-active" id="curve-active" d=""
+fill="none" stroke="url(#curveGrad)" stroke-width="4" stroke-linecap="round"/>
+</svg>
+
+<div class="stage-node" data-stage="1" style="left:60px;top:50px;">
+<div class="node-circle"><span class="node-icon">1</span></div>
+<div class="node-label">试炼之地</div>
+<div class="node-desc">初入冒险</div>
+</div>
+<div class="stage-node" data-stage="2" style="left:220px;top:150px;">
+<div class="node-circle"><span class="node-icon">2</span></div>
+<div class="node-label">熔岩洞窟</div>
+<div class="node-desc">灼热试炼</div>
+</div>
+<div class="stage-node" data-stage="3" style="left:380px;top:50px;">
+<div class="node-circle"><span class="node-icon">3</span></div>
+<div class="node-label">冰封遗迹</div>
+<div class="node-desc">极寒挑战</div>
+</div>
+<div class="stage-node" data-stage="4" style="left:540px;top:150px;">
+<div class="node-circle"><span class="node-icon">4</span></div>
+<div class="node-label">腐蚀沼泽</div>
+<div class="node-desc">毒雾弥漫</div>
+</div>
+<div class="stage-node" data-stage="5" style="left:700px;top:50px;">
+<div class="node-circle"><span class="node-icon">5</span></div>
+<div class="node-label">虚空王座</div>
+<div class="node-desc">最终决战</div>
+</div>
+</div>
+</div>
+<div class="stage-map-footer">
+<button id="btn-map-start" class="btn btn-primary btn-glow btn-large">开始挑战</button>
+<p class="stage-hint">点击高亮的关卡节点进行挑战</p>
+</div>
+</div>
+</div>
+
 <!-- 战斗界面 -->
 <div id="screen-battle" class="screen">
 <div class="battle-header">
@@ -128,9 +201,11 @@
 <div id="boss-card" class="boss-card"></div>
 <div class="boss-stats">
 <div class="hp-bar boss-hp">
-<div class="bar-label">Boss HP</div>
+<div class="hp-tag">BOSS</div>
+<div class="hp-bar-main">
 <div class="bar-track"><div id="boss-hp-fill" class="bar-fill hp"></div></div>
 <div id="boss-hp-text" class="bar-text">0 / 0</div>
+</div>
 </div>
 <div id="boss-status" class="status-effects"></div>
 </div>
@@ -143,9 +218,11 @@
 <div id="player-team" class="player-team"></div>
 <div class="player-stats">
 <div class="hp-bar player-hp">
-<div class="bar-label">队伍 HP</div>
+<div class="hp-tag">队伍</div>
+<div class="hp-bar-main">
 <div class="bar-track"><div id="player-hp-fill" class="bar-fill hp"></div></div>
 <div id="player-hp-text" class="bar-text">0 / 0</div>
+</div>
 </div>
 <div class="mp-bar player-mp">
 <div class="bar-label">MP</div>
@@ -213,6 +290,143 @@
 </div>
 </div>
 
+<!-- PvP 大厅 -->
+<div id="screen-pvp-lobby" class="screen">
+<div class="start-bg"><div class="floating-particles"></div></div>
+<div class="start-content">
+<h2 class="game-title"><span class="title-main">⚔️ 玩家对战</span></h2>
+<p class="game-desc">创建房间邀请好友，或输入房间号加入对战</p>
+<div class="start-buttons">
+<button id="btn-pvp-create" class="btn btn-primary btn-glow">创建房间</button>
+<div class="join-room-row">
+<input type="text" id="pvp-room-code" class="login-input" placeholder="输入6位房间号" maxlength="6" inputmode="numeric">
+<button id="btn-pvp-join" class="btn btn-secondary">加入房间</button>
+</div>
+<button id="btn-pvp-back" class="btn btn-ghost">返回主页</button>
+</div>
+</div>
+</div>
+
+<!-- PvP 房间 -->
+<div id="screen-pvp-room" class="screen">
+<div class="setup-header">
+<button id="btn-pvp-room-back" class="btn btn-icon">←</button>
+<h2>对战房间 <span id="pvp-room-code-display" class="team-count"></span></h2>
+</div>
+<div class="setup-container">
+<div class="team-panel">
+<h3>我的队伍</h3>
+<div id="pvp-team-slots" class="team-slots">
+<div class="team-slot" data-index="0"></div>
+<div class="team-slot" data-index="1"></div>
+<div class="team-slot" data-index="2"></div>
+<div class="team-slot" data-index="3"></div>
+<div class="team-slot" data-index="4"></div>
+</div>
+<div class="team-stats">
+<div class="stat-bar"><span>总生命</span><div class="bar"><div id="pvp-team-hp-bar" class="bar-fill hp"></div></div><span id="pvp-team-hp-text">0</span></div>
+<div class="stat-bar"><span>总攻击</span><div class="bar"><div id="pvp-team-atk-bar" class="bar-fill atk"></div></div><span id="pvp-team-atk-text">0</span></div>
+</div>
+<div style="margin-top:12px;">
+<button id="btn-pvp-ready" class="btn btn-success btn-large" style="width:100%;">准备就绪</button>
+</div>
+</div>
+<div class="collection-panel" id="pvp-collection-panel">
+<h3>选择出战卡牌</h3>
+<div id="pvp-collection" class="card-grid"></div>
+</div>
+<div class="team-panel" id="pvp-opponent-panel">
+<h3>对手 <span id="pvp-opponent-name" style="color:var(--text-muted);font-size:14px;">等待加入...</span></h3>
+<div id="pvp-opponent-slots" class="team-slots">
+<div class="team-slot locked"><div class="slot-lock-icon">?</div></div>
+<div class="team-slot locked"><div class="slot-lock-icon">?</div></div>
+<div class="team-slot locked"><div class="slot-lock-icon">?</div></div>
+<div class="team-slot locked"><div class="slot-lock-icon">?</div></div>
+<div class="team-slot locked"><div class="slot-lock-icon">?</div></div>
+</div>
+<div id="pvp-opponent-ready" style="text-align:center;margin-top:10px;color:var(--text-muted);font-size:13px;">未准备</div>
+<div style="margin-top:12px;display:none;" id="pvp-host-start-wrap">
+<button id="btn-pvp-start-battle" class="btn btn-primary btn-glow btn-large" style="width:100%;" disabled>开始战斗</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- PvP 战斗界面 -->
+<div id="screen-pvp-battle" class="screen">
+<div class="battle-header">
+<button id="btn-pvp-surrender" class="btn btn-icon btn-danger">🏳️</button>
+<h2>玩家对战</h2>
+</div>
+<div class="battle-arena">
+<div class="boss-area" id="pvp-opponent-area">
+<div id="pvp-opponent-team" class="player-team"></div>
+<div class="boss-stats">
+<div class="hp-bar boss-hp">
+<div class="hp-tag">对手</div>
+<div class="hp-bar-main">
+<div class="bar-track"><div id="pvp-opponent-hp-fill" class="bar-fill hp"></div></div>
+<div id="pvp-opponent-hp-text" class="bar-text">0 / 0</div>
+</div>
+</div>
+<div id="pvp-opponent-status" class="status-effects"></div>
+</div>
+</div>
+<div class="battle-info">
+<div id="pvp-turn-indicator" class="turn-indicator">等待中</div>
+<div id="pvp-battle-round" class="battle-round">回合 1</div>
+</div>
+<div class="player-area">
+<div id="pvp-my-team" class="player-team"></div>
+<div class="player-stats">
+<div class="hp-bar player-hp">
+<div class="hp-tag">我方</div>
+<div class="hp-bar-main">
+<div class="bar-track"><div id="pvp-my-hp-fill" class="bar-fill hp"></div></div>
+<div id="pvp-my-hp-text" class="bar-text">0 / 0</div>
+</div>
+</div>
+<div class="mp-bar player-mp">
+<div class="hp-tag">MP</div>
+<div class="mp-orbs-row">
+<div class="mp-orb" data-mp="1"><span>1</span></div>
+<div class="mp-orb" data-mp="2"><span>2</span></div>
+<div class="mp-orb" data-mp="3"><span>3</span></div>
+<div class="mp-orb" data-mp="4"><span>4</span></div>
+<div class="mp-orb" data-mp="5"><span>5</span></div>
+<div class="mp-orb" data-mp="6"><span>6</span></div>
+<div class="mp-orb" data-mp="7"><span>7</span></div>
+<div class="mp-orb" data-mp="8"><span>8</span></div>
+<div class="mp-orb" data-mp="9"><span>9</span></div>
+<div class="mp-orb" data-mp="10"><span>10</span></div>
+</div>
+<div id="pvp-my-mp-text" class="bar-text">0 / 10</div>
+</div>
+<div id="pvp-my-defense" class="defense-display">防御层: <span id="pvp-defense-count">0</span> / 4</div>
+<div id="pvp-my-status" class="status-effects"></div>
+</div>
+</div>
+</div>
+<div class="battle-controls">
+<div id="pvp-skill-buttons" class="skill-grid" style="text-align:center;color:var(--text-muted);padding:10px;font-size:13px;">点击角色卡片翻转查看技能</div>
+<div class="battle-actions">
+<button id="btn-pvp-defend" class="btn btn-defend">🛡️ 防御 (+1层)</button>
+<button id="btn-pvp-end-turn" class="btn btn-end-turn">⏭️ 结束回合</button>
+</div>
+</div>
+<div id="pvp-battle-log" class="battle-log"></div>
+<div id="modal-pvp-surrender" class="modal">
+<div class="modal-content">
+<h3>确认投降？</h3>
+<p>投降将视为战斗失败，确定要放弃吗？</p>
+<div class="modal-buttons">
+<button id="btn-pvp-surrender-cancel" class="btn btn-secondary">继续战斗</button>
+<button id="btn-pvp-surrender-confirm" class="btn btn-danger">确认投降</button>
+</div>
+</div>
+</div>
+</div>
+
 <!-- 收藏界面 -->
 <div id="screen-collection" class="screen">
 <div class="collection-header">
@@ -249,11 +463,13 @@
 <!-- Toast -->
 <div id="toast-container"></div>
 
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="js/api.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/cards.js"></script>
 <script src="js/camera.js"></script>
 <script src="js/battle.js"></script>
+<script src="js/pvp.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

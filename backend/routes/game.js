@@ -1,24 +1,58 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const { generateBuffChoices, createBattleState, processPlayerAction, endPlayerTurn, processBossTurn } = require('../services/gameEngine');
-const { loadJson, saveJson } = require('../utils/dataStore');
+const { generateStorySegment } = require('../services/llmService');
+const { get, run: runQuery, all } = require('../utils/db');
 const { validateBody } = require('../middleware/validator');
+const { authMiddleware } = require('../middleware/auth');
+const { v4: uuidv4 } = require('uuid');
+
+const LEGACY_PROGRESS_FILE = path.join(__dirname, '../data/progress.json');
+
+async function migrateLegacyProgress(userId) {
+  try {
+    const raw = await fs.promises.readFile(LEGACY_PROGRESS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    const data = parsed.data || parsed;
+    if (!data || (!data.currentRun && (!data.history || data.history.length === 0))) return;
+
+    // 检查该用户是否已有数据
+    const existing = await get('SELECT id FROM runs WHERE user_id = ?', [userId]);
+    if (existing) return;
+
+    console.log(`[Migrate] Importing legacy progress for user ${userId}`);
+    if (data.currentRun) {
+      await runQuery('INSERT INTO runs (id, user_id, run_json, status) VALUES (?, ?, ?, ?)',
+        [uuidv4(), userId, JSON.stringify(data.currentRun), data.currentRun.status || 'active']);
+    }
+    if (Array.isArray(data.history)) {
+      for (const h of data.history) {
+        await runQuery('INSERT INTO run_history (id, user_id, run_json, status) VALUES (?, ?, ?, ?)',
+          [uuidv4(), userId, JSON.stringify(h), h.status || 'unknown']);
+      }
+    }
+  } catch (e) {
+    if (e.code !== 'ENOENT') console.error('Legacy progress migration error:', e.message);
+  }
+}
 
 const router = express.Router();
-const PROGRESS_FILE = path.join(__dirname, '../data/progress.json');
 
-async function loadProgress() {
-  const doc = await loadJson(PROGRESS_FILE, { currentRun: null, history: [] });
-  return doc.data || { currentRun: null, history: [] };
-}
-
-async function saveProgress(progress) {
-  await saveJson(PROGRESS_FILE, progress);
-}
+// ===== 单人游戏接口（需登录）=====
+router.use(authMiddleware);
 
 router.get('/game-state', async (req, res, next) => {
   try {
-    const progress = await loadProgress();
+    await migrateLegacyProgress(req.user.id);
+    const runRow = await get('SELECT * FROM runs WHERE user_id = ?', [req.user.id]);
+    // 不再返回 history 完整数据（避免传输大量 base64 图片）
+    const historyCount = await get('SELECT COUNT(*) as count FROM run_history WHERE user_id = ?', [req.user.id]);
+    const progress = {
+      currentRun: runRow ? JSON.parse(runRow.run_json) : null,
+      history: [], // 前端不需要 history 数据来恢复游戏
+      historyCount: historyCount ? historyCount.count : 0
+    };
     res.json(progress);
   } catch (error) {
     next(error);
@@ -26,11 +60,20 @@ router.get('/game-state', async (req, res, next) => {
 });
 
 router.post('/game-state', validateBody({
-  currentRun: { type: 'object' },
-  history: { type: 'object', validator: v => Array.isArray(v), message: '必须是数组' }
+  currentRun: { type: 'object' }
 }), async (req, res, next) => {
   try {
-    await saveProgress(req.body);
+    // 保存当前冒险
+    if (req.body.currentRun) {
+      const existing = await get('SELECT id FROM runs WHERE user_id = ?', [req.user.id]);
+      if (existing) {
+        await runQuery('UPDATE runs SET run_json = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+          [JSON.stringify(req.body.currentRun), req.body.currentRun.status || 'active', req.user.id]);
+      } else {
+        await runQuery('INSERT INTO runs (id, user_id, run_json, status) VALUES (?, ?, ?, ?)',
+          [uuidv4(), req.user.id, JSON.stringify(req.body.currentRun), req.body.currentRun.status || 'active']);
+      }
+    }
     res.json({ success: true });
   } catch (error) {
     next(error);
@@ -50,12 +93,27 @@ router.post('/start-run', validateBody({
       maxRounds: 5,
       buffs: [],
       battleHistory: [],
+      adventureStory: [],
       status: 'active',
       startedAt: new Date().toISOString()
     };
-    const progress = await loadProgress();
-    progress.currentRun = run;
-    await saveProgress(progress);
+    // 保存或覆盖当前冒险
+    const existing = await get('SELECT id FROM runs WHERE user_id = ?', [req.user.id]);
+    if (existing) {
+      // 把旧的存到历史
+      const oldRun = await get('SELECT run_json FROM runs WHERE user_id = ?', [req.user.id]);
+      if (oldRun) {
+        const parsed = JSON.parse(oldRun.run_json);
+        parsed.status = 'abandoned';
+        await runQuery('INSERT INTO run_history (id, user_id, run_json, status) VALUES (?, ?, ?, ?)',
+          [uuidv4(), req.user.id, JSON.stringify(parsed), 'abandoned']);
+      }
+      await runQuery('UPDATE runs SET run_json = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+        [JSON.stringify(run), 'active', req.user.id]);
+    } else {
+      await runQuery('INSERT INTO runs (id, user_id, run_json, status) VALUES (?, ?, ?, ?)',
+        [uuidv4(), req.user.id, JSON.stringify(run), 'active']);
+    }
     res.json(run);
   } catch (error) {
     next(error);
@@ -75,12 +133,14 @@ router.post('/apply-buff', validateBody({
 }), async (req, res, next) => {
   try {
     const { buff } = req.body;
-    const progress = await loadProgress();
-    if (!progress.currentRun) {
+    const runRow = await get('SELECT * FROM runs WHERE user_id = ?', [req.user.id]);
+    if (!runRow) {
       return res.status(400).json({ error: '没有进行中的游戏' });
     }
-    progress.currentRun.buffs.push(buff);
-    await saveProgress(progress);
+    const run = JSON.parse(runRow.run_json);
+    run.buffs.push(buff);
+    await runQuery('UPDATE runs SET run_json = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+      [JSON.stringify(run), req.user.id]);
     res.json({ success: true, buff });
   } catch (error) {
     next(error);
@@ -92,15 +152,15 @@ router.post('/add-boss', validateBody({
 }), async (req, res, next) => {
   try {
     const { runState } = req.body;
-    const progress = await loadProgress();
-    progress.currentRun = runState;
-    if (progress.currentRun && progress.currentRun.currentRound >= progress.currentRun.maxRounds) {
-      progress.currentRun.status = 'won';
-      progress.history.push(progress.currentRun);
-      progress.currentRun = null;
+    const existing = await get('SELECT id FROM runs WHERE user_id = ?', [req.user.id]);
+    if (existing) {
+      await runQuery('UPDATE runs SET run_json = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+        [JSON.stringify(runState), req.user.id]);
+    } else {
+      await runQuery('INSERT INTO runs (id, user_id, run_json, status) VALUES (?, ?, ?, ?)',
+        [uuidv4(), req.user.id, JSON.stringify(runState), 'active']);
     }
-    await saveProgress(progress);
-    res.json({ success: true, run: progress.currentRun });
+    res.json({ success: true, run: runState });
   } catch (error) {
     next(error);
   }
@@ -108,19 +168,21 @@ router.post('/add-boss', validateBody({
 
 router.post('/reset-run', async (req, res, next) => {
   try {
-    const progress = await loadProgress();
-    if (progress.currentRun) {
-      progress.currentRun.status = 'lost';
-      progress.history.push(progress.currentRun);
-      progress.currentRun = null;
+    const runRow = await get('SELECT * FROM runs WHERE user_id = ?', [req.user.id]);
+    if (runRow) {
+      const run = JSON.parse(runRow.run_json);
+      run.status = 'lost';
+      await runQuery('INSERT INTO run_history (id, user_id, run_json, status) VALUES (?, ?, ?, ?)',
+        [uuidv4(), req.user.id, JSON.stringify(run), 'lost']);
+      await runQuery('DELETE FROM runs WHERE user_id = ?', [req.user.id]);
     }
-    await saveProgress(progress);
     res.json({ success: true });
   } catch (error) {
     next(error);
   }
 });
 
+// ===== 战斗接口 =====
 router.post('/battle/start', validateBody({
   team: { required: true, type: 'object', validator: v => Array.isArray(v) && v.length > 0, message: '必须是非空数组' },
   boss: { required: true, type: 'object', validator: v => v && typeof v.hp === 'number', message: '必须包含hp字段' }
@@ -155,6 +217,25 @@ router.post('/battle/end-turn', validateBody({
     processBossTurn(state);
     res.json({ success: true, state });
   } catch (error) {
+    next(error);
+  }
+});
+
+// ===== 冒险故事生成接口 =====
+router.post('/story/generate', async (req, res, next) => {
+  try {
+    const { team, newMember, round, previousStory, isFirst, isEnding } = req.body;
+    const segment = await generateStorySegment({
+      team: team || [],
+      newMember: newMember || {},
+      round: round || 1,
+      previousStory: previousStory || [],
+      isFirst: !!isFirst,
+      isEnding: !!isEnding
+    });
+    res.json({ segment });
+  } catch (error) {
+    console.error('Story generation route error:', error);
     next(error);
   }
 });
